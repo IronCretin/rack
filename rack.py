@@ -45,13 +45,10 @@ class VList(Value):
                 return self.elems[1]
             elif head.name == 'if':
                 pred = self.elems[1].run(ctx)
-                if isinstance(pred, Bool):
-                    if pred.val == True:
-                        return self.elems[2].run(ctx)
-                    else:
-                        return self.elems[3].run(ctx)
+                if isinstance(pred, Bool) and pred.val == False:
+                    return self.elems[3].run(ctx)
                 else:
-                    raise ValueError(f"Invalid predicate: {pred}")
+                    return self.elems[2].run(ctx)
             elif head.name == 'lambda':
                 return Lambda([a.name for a in self[1]], self[2:], ctx)
         head = head.run(ctx)
