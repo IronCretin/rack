@@ -106,6 +106,15 @@ class Bool(Value):
     def __invert__(self) -> 'Bool':
         return Bool(not self.val)
 
+    def __bool__(self) -> bool:
+        return self.val
+
+    def __str__(self):
+        if self.val:
+            return '#t'
+        else:
+            return '#f'
+
 
 class Name(Value):
     """
@@ -205,11 +214,19 @@ def product(*nums: Iterable[Num]) -> Num:
 
 stdlib: Dict[str, Value] = {
     # arithmetic and numbers
-    '+': PyFun('+', lambda *args: sum(args)),
+    '+': PyFun('+', lambda *args: Num(sum(a.val for a in args))),
     '-': PyFun('-', lambda a, b=None: -a if b is None else a - b),
     '*': PyFun('*', product),
     '/': PyFun('-', lambda a, b: a / b),
-    'num?': PyFun('num?', lambda n: Bool(isinstance(n, Num)))
+    'num?': PyFun('num?', lambda n: Bool(isinstance(n, Num))),
+    '<': PyFun('<', lambda a, b: Bool(a.val < b.val)),
+    '>': PyFun('>', lambda a, b: Bool(a.val > b.val)),
+    '<=': PyFun('<=', lambda a, b: Bool(a.val <= b.val)),
+    '>=': PyFun('>=', lambda a, b: Bool(a.val >= b.val)),
+    # booleans
+    'and': PyFun('and', lambda *args: Bool(all(args))),
+    'or': PyFun('or', lambda *args: Bool(any(args))),
+    'not': PyFun('not', lambda b: ~b),
 }
 
 
