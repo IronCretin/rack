@@ -42,6 +42,15 @@ class VList(Value):
         head = self.elems[0]
         if isinstance(head, Name) and head.name == 'quote':
             return self.elems[1]
+        elif isinstance(head, Name) and head.name == 'if':
+            pred = self.elems[1].run(ctx)
+            if isinstance(pred, Bool):
+                if pred.val == True:
+                    return self.elems[2].run(ctx)
+                else:
+                    return self.elems[3].run(ctx)
+            else:
+                raise ValueError
         else:
             head = head.run(ctx)
             args = [e.run(ctx) for e in self.elems[1:]]
@@ -80,6 +89,22 @@ class Num(Value):
             return str(self.val.real)
         else:
             return str(self.val)
+
+
+class Bool(Value):
+    val: bool
+
+    def __init__(self, val: bool) -> None:
+        self.val = val
+
+    def __and__(self, other: 'Bool') -> 'Bool':
+        return Bool(self.val and other.val)
+
+    def __or__(self, other: 'Bool') -> 'Bool':
+        return Bool(self.val or other.val)
+
+    def __invert__(self) -> 'Bool':
+        return Bool(not self.val)
 
 
 class Name(Value):
@@ -157,9 +182,16 @@ def _parse(head: str, toks: Iterator[str]) -> Value:
         return VList([Name('quote'), _parse(next(toks), toks)])
     elif head[0] in '0123456789':
         if re.fullmatch(r'[+-]?(?:0[xbo])?\d+', head):
-            return Num(int(head))
+            return Num(int(head, base=0))
         else:
             return Num(complex(head))
+    elif head[0] == '#':
+        if head == '#t':
+            return Bool(True)
+        elif head == '#f':
+            return Bool(False)
+        else:
+            raise ValueError
     else:
         return Name(head)
 
