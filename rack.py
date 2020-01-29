@@ -209,6 +209,7 @@ stdlib: Dict[str, Value] = {
     '-': PyFun('-', lambda a, b=None: -a if b is None else a - b),
     '*': PyFun('*', product),
     '/': PyFun('-', lambda a, b: a / b),
+    'num?': PyFun('num?', lambda n: Bool(isinstance(n, Num)))
 }
 
 
