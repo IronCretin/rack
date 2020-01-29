@@ -51,6 +51,14 @@ class VList(Value):
                     return self.elems[2].run(ctx)
             elif head.name == 'lambda':
                 return Lambda([a.name for a in self[1]], self[2:], ctx)
+            elif head.name == 'define':
+                if isinstance(self[1], VList):
+                    ctx[self[1][0].name] = Lambda(
+                        [a.name for a in self[1][1:]],
+                        self[2:], ctx, self[1][0].name)
+                else:
+                    ctx[self[1].name] = self[2].run(ctx)
+                return VList([])
         head = head.run(ctx)
         args = [e.run(ctx) for e in self.elems[1:]]
         if isinstance(head, Fun):
@@ -125,7 +133,7 @@ class Name(Value):
         self.name = name
 
     def run(self, ctx: Context) -> Value:
-        if self.name not in ('quote', 'if', 'lambda'):
+        if self.name not in ('quote', 'if', 'lambda', 'define'):
             return ctx[self.name]
         else:
             raise ValueError(f"Reserved name: {self.name}")
