@@ -7,11 +7,22 @@ Context = ChainMap[str, 'Value']
 
 
 class Value(ABC):
+    """
+    Superclass for all lisp objects and expressions.
+    """
     def run(self, ctx: Context) -> 'Value':
+        """
+        Evaluate the object in a context of variables, behavior depends on type
+        """
         return self
 
 
 class VList(Value):
+    """
+    List/S-Expression. When evaluated, if the first element is a literal
+    name corresponding to a special form, exaluates according to form's rules,
+    otherwise evaluates head and passes arguments to it as a function.
+    """
     elems: List[Value]
 
     def __init__(self, elems: List[Value]) -> None:
@@ -40,6 +51,9 @@ class VList(Value):
 
 
 class Num(Value):
+    """
+    A number, is either an int or a complex number, which are interoperable.
+    """
     val: complex
 
     def __init__(self, val: complex) -> None:
@@ -65,6 +79,10 @@ class Num(Value):
 
 
 class Name(Value):
+    """
+    A name, when evaluated returns the result of looking up the name in the
+    variable context. Attempting to evaluate a reserved name will fail.
+    """
     name: str
 
     def __init__(self, name: str) -> None:
@@ -81,6 +99,9 @@ class Name(Value):
 
 
 class Fun(Value):
+    """
+    A function or other callable.
+    """
     @abstractmethod
     def call(self, args: Sequence[Value]) -> Value: ...
 
@@ -89,6 +110,10 @@ class Fun(Value):
 
 
 class PyFun(Fun):
+    """
+    Wrapper for a native python function, takes some list of Values and
+    returns a Value
+    """
     def __init__(self, name: str, fun: Callable[..., Value]):
         self.name = name
         self.fun = fun
@@ -101,12 +126,20 @@ class PyFun(Fun):
 
 
 def parse(inp: str) -> Iterator[Value]:
+    """
+    Parses an input string into expressions.
+    """
+    # This function tust tokenizes and passes the stream of tokens to the real
+    # parser
     toks = iter(re.findall(r'\(|\)|\'|[^()\'\s]+', inp))
     for t in toks:
         yield _parse(t, toks)
 
 
 def _parse(head: str, toks: Iterator[str]) -> Value:
+    """
+    Perses a stream of tokens into a syntax tree
+    """
     if head == '(':
         lis: List[Value] = []
         for t in toks:
