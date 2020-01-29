@@ -71,7 +71,10 @@ class Name(Value):
         self.name = name
 
     def run(self, ctx: Context) -> Value:
-        return ctx[self.name]
+        if self.name not in ('quote', 'lambda'):
+            return ctx[self.name]
+        else:
+            raise ValueError
 
     def __str__(self):
         return self.name
