@@ -51,14 +51,14 @@ class VList(Value):
                     else:
                         return self.elems[3].run(ctx)
                 else:
-                    raise ValueError
+                    raise ValueError(f"Invalid predicate: {pred}")
             elif head.name == 'lambda':
                 return Lambda([a.name for a in self[1]], self[2:], ctx)
         head = head.run(ctx)
         args = [e.run(ctx) for e in self.elems[1:]]
         if isinstance(head, Fun):
             return head.call(args)
-        raise ValueError
+        raise ValueError("Invalid expression: {head} is not a function.")
 
 
 class Num(Value):
@@ -131,7 +131,7 @@ class Name(Value):
         if self.name not in ('quote', 'if', 'lambda'):
             return ctx[self.name]
         else:
-            raise ValueError
+            raise ValueError(f"Reserved name: {self.name}")
 
     def __str__(self):
         return self.name
@@ -161,21 +161,23 @@ class PyFun(Fun):
         return self.fun(*args)
 
     def __str__(self):
-        return f"#<function:{self.name}>"
+        return f"#<native function:{self.name}>"
 
 
 class Lambda(Fun):
-    def __init__(self, args: List[str], stmts: List[Value], closure: Context):
+    def __init__(self, args: List[str], stmts: List[Value], closure: Context,
+            name: str = 'lambda'):
         self.args = args
         self.statements = stmts
         self.closure = closure
+        self.name = name
 
     def call(self, args):
         ctx = self.closure.new_child(dict(zip(self.args, args)))
         return run(self.statements, ctx)
 
     def __str__(self):
-        return '#<function>'
+        return f"#<function:{self.name}>"
 
 
 def parse(inp: str) -> Iterator[Value]:
@@ -201,7 +203,7 @@ def _parse(head: str, toks: Iterator[str]) -> Value:
             else:
                 lis.append(_parse(t, toks))
         else:
-            raise ValueError
+            raise ValueError("List not terminated")
     elif head == '\'':
         return VList([Name('quote'), _parse(next(toks), toks)])
     elif re.match(r'[+-]?\d', head):
@@ -215,7 +217,7 @@ def _parse(head: str, toks: Iterator[str]) -> Value:
         elif head == '#f':
             return Bool(False)
         else:
-            raise ValueError
+            raise ValueError(f"Invalid expression: {head}")
     else:
         return Name(head)
 
