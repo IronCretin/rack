@@ -40,24 +40,25 @@ class VList(Value):
 
     def run(self, ctx: Context) -> Value:
         head = self.elems[0]
-        if isinstance(head, Name) and head.name == 'quote':
-            return self.elems[1]
-        elif isinstance(head, Name) and head.name == 'if':
-            pred = self.elems[1].run(ctx)
-            if isinstance(pred, Bool):
-                if pred.val == True:
-                    return self.elems[2].run(ctx)
+        if isinstance(head, Name):
+            if head.name == 'quote':
+                return self.elems[1]
+            elif head.name == 'if':
+                pred = self.elems[1].run(ctx)
+                if isinstance(pred, Bool):
+                    if pred.val == True:
+                        return self.elems[2].run(ctx)
+                    else:
+                        return self.elems[3].run(ctx)
                 else:
-                    return self.elems[3].run(ctx)
-            else:
-                raise ValueError
-        else:
-            head = head.run(ctx)
-            args = [e.run(ctx) for e in self.elems[1:]]
-            if isinstance(head, Fun):
-                return head.call(args)
-            else:
-                raise ValueError
+                    raise ValueError
+            elif head.name == 'lambda':
+                return Lambda([a.name for a in self[1]], self[2:], ctx)
+        head = head.run(ctx)
+        args = [e.run(ctx) for e in self.elems[1:]]
+        if isinstance(head, Fun):
+            return head.call(args)
+        raise ValueError
 
 
 class Num(Value):
@@ -127,7 +128,7 @@ class Name(Value):
         self.name = name
 
     def run(self, ctx: Context) -> Value:
-        if self.name not in ('quote', 'lambda'):
+        if self.name not in ('quote', 'if', 'lambda'):
             return ctx[self.name]
         else:
             raise ValueError
@@ -163,6 +164,20 @@ class PyFun(Fun):
         return f"#<function:{self.name}>"
 
 
+class Lambda(Fun):
+    def __init__(self, args: List[str], stmts: List[Value], closure: Context):
+        self.args = args
+        self.statements = stmts
+        self.closure = closure
+
+    def call(self, args):
+        ctx = self.closure.new_child(dict(zip(self.args, args)))
+        return run(self.statements, ctx)
+
+    def __str__(self):
+        return '#<function>'
+
+
 def parse(inp: str) -> Iterator[Value]:
     """
     Parses an input string into expressions.
@@ -189,7 +204,7 @@ def _parse(head: str, toks: Iterator[str]) -> Value:
             raise ValueError
     elif head == '\'':
         return VList([Name('quote'), _parse(next(toks), toks)])
-    elif head[0] in '0123456789':
+    elif re.match(r'[+-]?\d', head):
         if re.fullmatch(r'[+-]?(?:0[xbo])?\d+', head):
             return Num(int(head, base=0))
         else:
@@ -223,6 +238,7 @@ stdlib: Dict[str, Value] = {
     '>': PyFun('>', lambda a, b: Bool(a.val > b.val)),
     '<=': PyFun('<=', lambda a, b: Bool(a.val <= b.val)),
     '>=': PyFun('>=', lambda a, b: Bool(a.val >= b.val)),
+    '=': PyFun('=', lambda a, b: Bool(a.val == b.val)),
     # booleans
     'and': PyFun('and', lambda *args: Bool(all(args))),
     'or': PyFun('or', lambda *args: Bool(any(args))),
