@@ -1,4 +1,5 @@
-from typing import ChainMap, Sequence, List, Iterator, Iterable, Callable, Dict
+from typing import ChainMap, Sequence, List, Iterator, Iterable, Callable,\
+    Dict
 from abc import ABC, abstractmethod
 import re
 import sys
@@ -64,6 +65,9 @@ class Num(Value):
 
     def __sub__(self, other: 'Num') -> 'Num':
         return Num(self.val - other.val)
+
+    def __neg__(self) -> 'Num':
+        return Num(-self.val)
 
     def __mul__(self, other: 'Num') -> 'Num':
         return Num(self.val * other.val)
@@ -160,8 +164,19 @@ def _parse(head: str, toks: Iterator[str]) -> Value:
         return Name(head)
 
 
+def product(*nums: Iterable[Num]) -> Num:
+    p = 1
+    for n in nums:
+        p *= n.val
+    return Num(p)
+
+
 stdlib: Dict[str, Value] = {
-    '+': PyFun('+', lambda *args: Num(sum(a.val for a in args)))
+    # arithmetic and numbers
+    '+': PyFun('+', lambda *args: sum(args)),
+    '-': PyFun('-', lambda a, b=None: -a if b is None else a - b),
+    '*': PyFun('*', product),
+    '/': PyFun('-', lambda a, b: a / b),
 }
 
 
@@ -177,4 +192,4 @@ def run(exps: Iterable[Value],
     return res
 
 
-run(parse(sys.argv[1]), None, True)
+run(parse(' '.join(sys.argv[1:])), None, True)
