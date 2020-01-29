@@ -27,12 +27,16 @@ class VList(Value):
         return f"({' '.join(map(str, self.elems))})"
 
     def run(self, ctx: Context) -> Value:
-        head = self.elems[0].run(ctx)
-        args = [e.run(ctx) for e in self.elems[1:]]
-        if isinstance(head, Fun):
-            return head.call(args)
+        head = self.elems[0]
+        if isinstance(head, Name) and head.name == 'quote':
+            return self.elems[1]
         else:
-            raise ValueError
+            head = head.run(ctx)
+            args = [e.run(ctx) for e in self.elems[1:]]
+            if isinstance(head, Fun):
+                return head.call(args)
+            else:
+                raise ValueError
 
 
 class Num(Value):
@@ -94,7 +98,7 @@ class PyFun(Fun):
 
 
 def parse(inp: str) -> Iterator[Value]:
-    toks = iter(re.findall(r'\(|\)|[^()\s]+', inp))
+    toks = iter(re.findall(r'\(|\)|\'|[^()\'\s]+', inp))
     for t in toks:
         yield _parse(t, toks)
 
@@ -109,6 +113,8 @@ def _parse(head: str, toks: Iterator[str]) -> Value:
                 lis.append(_parse(t, toks))
         else:
             raise ValueError
+    elif head == '\'':
+        return VList([Name('quote'), _parse(next(toks), toks)])
     elif head[0] in '0123456789':
         if re.fullmatch(r'[+-]?(?:0[xbo])?\d+', head):
             return Num(int(head))
