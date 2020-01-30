@@ -3,6 +3,7 @@ from typing import ChainMap, Sequence, List, Iterator, Iterable, Callable,\
 from abc import ABC, abstractmethod
 import re
 import sys
+from dictclass import mk_dict, key
 
 Context = ChainMap[str, 'Value']
 
@@ -171,7 +172,7 @@ class PyFun(Fun):
 
 class Lambda(Fun):
     def __init__(self, args: List[str], stmts: List[Value], closure: Context,
-            name: str = 'lambda'):
+                name: str = 'lambda'):
         self.args = args
         self.statements = stmts
         self.closure = closure
@@ -227,30 +228,70 @@ def _parse(head: str, toks: Iterator[str]) -> Value:
         return Name(head)
 
 
-def product(*nums: Iterable[Num]) -> Num:
-    p = 1
-    for n in nums:
-        p *= n.val
-    return Num(p)
+def py_fun(n):
+    def inner(f):
+        return key(n)(PyFun(n, f))
+    return inner
 
 
-stdlib: Dict[str, Value] = {
+@mk_dict
+class stdlib:
     # arithmetic and numbers
-    '+': PyFun('+', lambda *args: Num(sum(a.val for a in args))),
-    '-': PyFun('-', lambda a, b=None: -a if b is None else a - b),
-    '*': PyFun('*', product),
-    '/': PyFun('-', lambda a, b: a / b),
-    'num?': PyFun('num?', lambda n: Bool(isinstance(n, Num))),
-    '<': PyFun('<', lambda a, b: Bool(a.val < b.val)),
-    '>': PyFun('>', lambda a, b: Bool(a.val > b.val)),
-    '<=': PyFun('<=', lambda a, b: Bool(a.val <= b.val)),
-    '>=': PyFun('>=', lambda a, b: Bool(a.val >= b.val)),
-    '=': PyFun('=', lambda a, b: Bool(a.val == b.val)),
+    @py_fun('+')
+    def plus(*args):
+        return Num(sum(a.val for a in args))
+
+    @py_fun('-')
+    def minus(a, b=None):
+        return -a if b is None else a - b
+
+    @py_fun('*')
+    def mul(*nums):
+        p = 1
+        for n in nums:
+            p *= n.val
+        return Num(p)
+
+    @py_fun('/')
+    def div(a, b):
+        return a / b
+
+    @py_fun('num?')
+    def num(n):
+        return Bool(isinstance(n, Num))
+
+    @py_fun('<')
+    def lt(a, b):
+        return Bool(a.val < b.val)
+
+    @py_fun('>')
+    def gt(a, b):
+        return Bool(a.val > b.val)
+
+    @py_fun('<=')
+    def le(a, b):
+        return Bool(a.val <= b.val)
+
+    @py_fun('>=')
+    def ge(a, b):
+        return Bool(a.val >= b.val)
+
+    @py_fun('=')
+    def eq(a, b):
+        return Bool(a.val == b.val)
+
     # booleans
-    'and': PyFun('and', lambda *args: Bool(all(args))),
-    'or': PyFun('or', lambda *args: Bool(any(args))),
-    'not': PyFun('not', lambda b: ~b),
-}
+    @py_fun('and')
+    def and_(*args):
+        return Bool(all(args))
+
+    @py_fun('or')
+    def or_(*args):
+        return Bool(any(args))
+
+    @py_fun('not')
+    def not_(b):
+        return ~b
 
 
 def run(exps: Iterable[Value],
