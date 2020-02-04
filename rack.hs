@@ -2,9 +2,12 @@
 
 import Data.Char
 import Data.List
-import Control.Monad.State.Strict
+import Control.Monad.State
 import Control.Applicative
 import Data.Maybe
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as N
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 
 data Datum
@@ -122,5 +125,24 @@ instance Read Datum where
     readsPrec _ s = maybeToList $ fmap (fmap detokenize) $ runStateT dat $ filter (not . isTSpace) $ tokenize s
     readList s = maybeToList $ fmap (fmap detokenize) $ runStateT (many dat) $ filter (not . isTSpace) $ tokenize s
 
+newtype ChainMap k v = ChainMap { maps :: NonEmpty (Map k v) } deriving (Show, Eq)
+chempty :: ChainMap k v
+chempty = ChainMap $ pure M.empty
+chinsert :: Ord k => k -> v -> ChainMap k v -> ChainMap k v
+chinsert k v (ChainMap (m :| ms)) = ChainMap (M.insert k v m :| ms) 
+chchange :: Ord k => k -> v -> ChainMap k v -> ChainMap k v
+chchange k v (ChainMap ms) = ChainMap $ N.fromList $ go $ N.toList ms
+    where go []                      =  []
+          go (m:ms) | k `M.member` m = M.insert k v m : ms
+                    | otherwise      = m : go ms
+chlookup :: Ord k => k -> ChainMap k v -> Maybe v
+chlookup k (ChainMap ms) = N.head <$> traverse (M.lookup k) ms
+chpush :: ChainMap k v -> ChainMap k v
+chpush (ChainMap ms) = ChainMap $ N.cons M.empty ms
+chpop :: ChainMap k v -> ChainMap k v
+chpop (ChainMap (m :| [])) = chempty
+chpop (ChainMap (m :| m' : ms)) = ChainMap $ m :| ms
 
--- evaluator :: Datum -> StateT (M.Map String Datum) IO Datum
+
+-- evaluator :: IORef (ChainMap String Datum) -> Datum -> IO Datum
+-- evaluator env dat = do
