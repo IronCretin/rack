@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
+import Data.IORef
 import Data.Char
 import Data.List
 import Control.Monad.State
@@ -144,5 +145,23 @@ chpop (ChainMap (m :| [])) = chempty
 chpop (ChainMap (m :| m' : ms)) = ChainMap $ m :| ms
 
 
--- evaluator :: IORef (ChainMap String Datum) -> Datum -> IO Datum
--- evaluator env dat = do
+evaluator :: IORef (ChainMap String Datum) -> Datum -> IO Datum
+evaluator envr (Symbol n)                 = do
+    env <- readIORef envr
+    case chlookup n env of
+        Just d  -> pure d
+        Nothing -> error $ "undefined variable: " ++ n ++ " not found in " ++ show env
+evaluator envr (Cons (Symbol "define") t) = case toList t of
+    [Symbol n, val] -> do
+        val' <- evaluator envr val
+        modifyIORef envr $ chinsert n val'
+        pure Void
+evaluator envr dat                        = pure dat
+
+evalWith :: ChainMap String Datum -> [Datum] -> IO [Datum]
+evalWith env dats = do
+    envr <- newIORef env
+    traverse (evaluator envr) dats
+
+eval :: [Datum] -> IO [Datum]
+eval = evalWith chempty
