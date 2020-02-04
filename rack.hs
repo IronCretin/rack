@@ -55,6 +55,7 @@ data Token
     | TInt Int
     | TSymb String
     | THash String
+    | TDot
     | TSpace String
     deriving (Eq, Show)
 
@@ -65,9 +66,10 @@ tokenize :: String -> [Token]
 tokenize []                            = []
 tokenize l@(c:cs) | c `elem` "([{"     = TOpen c : tokenize cs
                   | c `elem` ")]}"     = TClose c : tokenize cs
+                  | c == '.'           = TDot : tokenize cs
                   | isSpace c          = let (n, r) = span isSpace l in TSpace n : tokenize r
                   | isDigit c          = let (n, r) = span isDigit l in TInt (read n) : tokenize r
-                  | c == ';'           = let (n, r) = break (== '\n') in TSpace n : tokenize r
+                  | c == ';'           = let (n, r) = break (== '\n') l in TSpace n : tokenize r
                   | c == '#'           = let (n, r) = break isReserved cs in THash n : tokenize r
                   | not $ isReserved c = let (n, r) = break isReserved l in TSymb n : tokenize r
 
@@ -78,18 +80,28 @@ detokenize ts = ts >>= \case
     TInt i   -> show i
     TSymb s  -> s
     THash h  -> '#':h
+    TDot     -> "."
     TSpace s -> s
-
 
 close :: Char -> Char
 close '(' = ')'
 close '[' = ']'
 close '{' = '}'
 
-require :: (Eq t, Alternative m) => t -> StateT [t] m ()
-require x = StateT $ \case
-    y:ys | x == y -> pure ((), ys)
-    _             -> empty
+isTSpace :: Token -> Bool
+isTSpace (TSpace _) = True
+isTSpace _          = False
+
+next :: MonadPlus m => StateT [t] m t
+next = StateT $ \case
+    x:xs -> pure (x, xs)
+    []   -> empty
+
+require :: (Eq t, MonadPlus m) => t -> StateT [t] m t
+require x = mfilter (== x) next
+
+-- space :: MonadPlus m => StateT [Token] m [Token]
+-- space = many $ mfilter isTSpace next
 
 
 dat :: StateT [Token] Maybe Datum
@@ -97,18 +109,18 @@ dat = StateT $ \case
     []             -> empty
     TOpen p:rest   -> flip runStateT rest $ do
         ds <- many dat
+        end <- (require TDot *> dat) <|> pure Nil
         require (TClose (close p))
-        pure $ foldr Cons Nil ds
+        pure $ foldr Cons end ds
     THash "t":rest -> pure (Bool True, rest)
     THash "f":rest -> pure (Bool False, rest)
     TSymb s:rest   -> pure (Symbol s, rest)
     TInt i:rest    -> pure (Int i, rest)
-    TSpace _:rest  -> runStateT dat rest
     _              -> empty
 
 instance Read Datum where
-    readsPrec _ s = maybeToList $ fmap detokenize <$> runStateT dat (tokenize s)
-    readList s = maybeToList $ fmap detokenize <$> runStateT (many dat) (tokenize s)
+    readsPrec _ s = maybeToList $ fmap (fmap detokenize) $ runStateT dat $ filter (not . isTSpace) $ tokenize s
+    readList s = maybeToList $ fmap (fmap detokenize) $ runStateT (many dat) $ filter (not . isTSpace) $ tokenize s
 
 
 -- evaluator :: Datum -> StateT (M.Map String Datum) IO Datum
