@@ -146,22 +146,35 @@ chpop (ChainMap (m :| m' : ms)) = ChainMap $ m :| ms
 
 
 evaluator :: IORef (ChainMap String Datum) -> Datum -> IO Datum
-evaluator envr (Symbol n)                 = do
+evaluator envr (Symbol n) = do
+    if n `elem` ["define"] then error "reserved word" else pure ()
     env <- readIORef envr
     case chlookup n env of
         Just d  -> pure d
         Nothing -> error $ "undefined variable: " ++ n ++ " not found in " ++ show env
-evaluator envr (Cons (Symbol "define") t) = case toList t of
-    [Symbol n, val] -> do
+evaluator envr (Cons h t) = case (h, t) of
+    (Symbol "define", Cons (Symbol n) (Cons val Nil)) -> do
         val' <- evaluator envr val
         modifyIORef envr $ chinsert n val'
         pure Void
-evaluator envr dat                        = pure dat
+    _                                                 -> do
+        fun <- evaluator envr h
+        case fun of
+            WrapFun _ f -> do
+                args <- traverse (evaluator envr) (toList t)
+                pure $ f args
+
+evaluator envr dat        = pure dat
 
 evalWith :: ChainMap String Datum -> [Datum] -> IO [Datum]
 evalWith env dats = do
     envr <- newIORef env
     traverse (evaluator envr) dats
 
+stdlib :: Map String Datum
+stdlib = M.fromList $ [
+    ("+", WrapFun "+" (Int . sum . fmap ival))
+    ]
+
 eval :: [Datum] -> IO [Datum]
-eval = evalWith chempty
+eval = evalWith $ ChainMap $ pure stdlib
