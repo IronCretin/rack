@@ -61,6 +61,7 @@ data Token
     | TSymb String
     | THash String
     | TDot
+    | TQuote
     | TSpace String
     deriving (Eq, Show)
 
@@ -78,6 +79,7 @@ tokenize []                                                       = []
 tokenize l@(c:cs) | c `elem` "([{"                                = TOpen c : tokenize cs
                   | c `elem` ")]}"                                = TClose c : tokenize cs
                   | c == '.'                                      = TDot : tokenize cs
+                  | c == '\''                                     = TQuote : tokenize cs
                   | isSpace c                                     = 
                         let (n, r) = span isSpace l in TSpace n : tokenize r
                   | isDigit c || (c == '-' && isDigit (head cs))  = 
@@ -97,6 +99,7 @@ detokenize ts = ts >>= \case
     TSymb s  -> s
     THash h  -> '#':h
     TDot     -> "."
+    TQuote   -> "'"
     TSpace s -> s
 
 close :: Char -> Char
@@ -132,6 +135,9 @@ dat = StateT $ \case
     THash "f":rest -> pure (Bool False, rest)
     TSymb s:rest   -> pure (Symbol s, rest)
     TRat i:rest    -> pure (Rat i, rest)
+    TQuote:rest    -> flip runStateT rest $ do
+        ex <- dat
+        pure $ fromList [Symbol "quote", ex]
     _              -> empty
 
 instance Read Datum where
@@ -159,16 +165,17 @@ chpop (ChainMap (m :| m' : ms)) = ChainMap $ m :| ms
 
 evaluator :: IORef (ChainMap String Datum) -> Datum -> IO Datum
 evaluator envr (Symbol n) = do
-    if n `elem` ["define"] then error "reserved word" else pure ()
+    if n `elem` ["define", "quote"] then error "reserved word" else pure ()
     env <- readIORef envr
     case chlookup n env of
         Just d  -> pure d
         Nothing -> error $ "undefined variable: " ++ n ++ " not found in " ++ show env
-evaluator envr (Cons h t) = case (h, t) of
-    (Symbol "define", Cons (Symbol n) (Cons val Nil)) -> do
+evaluator envr (Cons h t) = case (h, toList t) of
+    (Symbol "define", [Symbol n, val]) -> do
         val' <- evaluator envr val
         modifyIORef envr $ chinsert n val'
         pure Void
+    (Symbol "quote", [val])  -> pure val
     _                                                 -> do
         fun <- evaluator envr h
         case fun of
