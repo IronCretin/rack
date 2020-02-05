@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
+import System.IO
 import Data.IORef
 import Data.Ratio
 import Data.Char
@@ -33,6 +34,13 @@ instance Show Datum where
     show (Symbol s)    = s
     -- show (String s)    = show s
     show (WrapFun n _) = "#<procedure:" ++ n ++ ">"
+
+printed :: Datum -> String
+printed Void         = ""
+printed p@Nil        = '\'':show p
+printed p@(Symbol _) = '\'':show p
+printed p@(Cons _ _) = '\'':show p
+printed d            = show d ++ "\n"
 
 slist :: Datum -> String
 slist Nil        = ""
@@ -208,3 +216,17 @@ stdlib = M.fromList $ [
 
 eval :: [Datum] -> IO [Datum]
 eval = evalWith $ ChainMap $ pure stdlib
+
+repl :: IORef (ChainMap String Datum) -> IO ()
+repl envr = do
+    putStr "> "
+    hFlush stdout
+    exps <- readLn
+    res <- traverse (evaluator envr) exps
+    putStr $ printed =<< res
+    repl envr
+
+main :: IO ()
+main = do
+    envr <- newIORef $ ChainMap $ pure stdlib
+    repl envr
