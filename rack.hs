@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 
 import Data.IORef
+import Data.Ratio
 import Data.Char
 import Data.List
 import Control.Monad.State
@@ -15,7 +16,7 @@ data Datum
     = Void
     | Nil
     | Cons { car, cdr :: Datum }
-    | Int { ival :: Int }
+    | Rat { rval :: Rational }
     | Bool { bval :: Bool }
     | Symbol { sval :: String }
     -- | String { sval :: String }
@@ -26,7 +27,7 @@ instance Show Datum where
     show Void          = "#<void>"
     show Nil           = "()"
     show (Cons h t)    = "(" ++ show h ++ slist t ++ ")"
-    show (Int i)       = show i
+    show (Rat i)       = if denominator i == 1 then show (numerator i) else show (fromRational i)
     show (Bool True)   = "#t"
     show (Bool False)  = "#f"
     show (Symbol s)    = s
@@ -50,13 +51,13 @@ toList Nil        = []
 toList (Cons h t) = h : toList t 
 
 isNum :: Datum -> Bool
-isNum (Int _) = True
+isNum (Rat _) = True
 isNum _       = False
 
 data Token
     = TOpen Char
     | TClose Char
-    | TInt Int
+    | TRat Rational
     | TSymb String
     | THash String
     | TDot
@@ -66,22 +67,33 @@ data Token
 isReserved :: Char -> Bool
 isReserved c = isSpace c || isDigit c || c `elem` "()[]{}.';|\\"
 
+readRat :: String -> Rational
+readRat s = case break (`elem` "/.") s of
+    (n, "")    -> fromInteger $ read n
+    (n, '/':d) -> read n % read d
+    (w, '.':f) -> fromInteger (read (w ++ f)) / (10^(length f))
+
 tokenize :: String -> [Token]
-tokenize []                            = []
-tokenize l@(c:cs) | c `elem` "([{"     = TOpen c : tokenize cs
-                  | c `elem` ")]}"     = TClose c : tokenize cs
-                  | c == '.'           = TDot : tokenize cs
-                  | isSpace c          = let (n, r) = span isSpace l in TSpace n : tokenize r
-                  | isDigit c          = let (n, r) = span isDigit l in TInt (read n) : tokenize r
-                  | c == ';'           = let (n, r) = break (== '\n') l in TSpace n : tokenize r
-                  | c == '#'           = let (n, r) = break isReserved cs in THash n : tokenize r
-                  | not $ isReserved c = let (n, r) = break isReserved l in TSymb n : tokenize r
+tokenize []                                                       = []
+tokenize l@(c:cs) | c `elem` "([{"                                = TOpen c : tokenize cs
+                  | c `elem` ")]}"                                = TClose c : tokenize cs
+                  | c == '.'                                      = TDot : tokenize cs
+                  | isSpace c                                     = 
+                        let (n, r) = span isSpace l in TSpace n : tokenize r
+                  | isDigit c || (c == '-' && isDigit (head cs))  = 
+                        let (n, r) = span ((||) <$> isDigit <*> (=='/')) cs in TRat (readRat $ c:n) : tokenize r
+                  | c == ';'                                      = 
+                        let (n, r) = break (== '\n') l in TSpace n : tokenize r
+                  | c == '#'                                      = 
+                        let (n, r) = break isReserved cs in THash n : tokenize r
+                  | not $ isReserved c                            = 
+                        let (n, r) = break isReserved l in TSymb n : tokenize r
 
 detokenize :: [Token] -> String
 detokenize ts = ts >>= \case 
     TOpen c  -> [c]
     TClose c -> [c]
-    TInt i   -> show i
+    TRat i   -> show i
     TSymb s  -> s
     THash h  -> '#':h
     TDot     -> "."
@@ -119,7 +131,7 @@ dat = StateT $ \case
     THash "t":rest -> pure (Bool True, rest)
     THash "f":rest -> pure (Bool False, rest)
     TSymb s:rest   -> pure (Symbol s, rest)
-    TInt i:rest    -> pure (Int i, rest)
+    TRat i:rest    -> pure (Rat i, rest)
     _              -> empty
 
 instance Read Datum where
@@ -173,7 +185,10 @@ evalWith env dats = do
 
 stdlib :: Map String Datum
 stdlib = M.fromList $ [
-    ("+", WrapFun "+" (Int . sum . fmap ival))
+    ("+", WrapFun "+" (Rat . sum . fmap rval)),
+    ("*", WrapFun "*" (Rat . product . fmap rval)),
+    ("-", WrapFun "-" (\case {[Rat a] -> Rat (-a); [Rat a, Rat b] -> Rat (a - b)})),
+    ("/", WrapFun "/" (\[Rat a, Rat b] -> Rat (a / b)))
     ]
 
 eval :: [Datum] -> IO [Datum]
