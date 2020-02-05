@@ -195,7 +195,15 @@ stdlib = M.fromList $ [
     ("+", WrapFun "+" (Rat . sum . fmap rval)),
     ("*", WrapFun "*" (Rat . product . fmap rval)),
     ("-", WrapFun "-" (\case {[Rat a] -> Rat (-a); [Rat a, Rat b] -> Rat (a - b)})),
-    ("/", WrapFun "/" (\[Rat a, Rat b] -> Rat (a / b)))
+    ("/", WrapFun "/" (\[Rat a, Rat b] -> Rat (a / b))),
+    ("num?", WrapFun "num?" (\case {[Rat _] -> Bool True; _ -> Bool False})),
+
+    ("cons", WrapFun "cons" (\[a, b] -> Cons a b)),
+    ("car", WrapFun "car" (\[Cons h _] -> h)),
+    ("cdr", WrapFun "cdr" (\[Cons _ t] -> t)),
+    ("pair?", WrapFun "pair?" (\case {[Cons _ _] -> Bool True; _ -> Bool False})),
+    ("list", WrapFun "list" fromList),
+    ("list?", WrapFun "list?" (\[d] -> Bool $ isList d))
     ]
 
 eval :: [Datum] -> IO [Datum]
